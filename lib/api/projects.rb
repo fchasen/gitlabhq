@@ -18,7 +18,17 @@ module API
       # Example Request:
       #   GET /projects
       get do
-        @projects = current_user.authorized_projects
+        @projects = case params[:scope]
+          when 'personal' then
+            current_user.namespace.projects
+          when 'joined' then
+            current_user.authorized_projects.joined(current_user)
+          when 'owned' then
+            current_user.owned_projects
+          else
+            current_user.authorized_projects
+          end
+
         sort = params[:sort] == 'desc' ? 'desc' : 'asc'
 
         @projects = case params["order_by"]
@@ -32,6 +42,10 @@ module API
         # If the archived parameter is passed, limit results accordingly
         if params[:archived].present?
           @projects = @projects.where(archived: parse_boolean(params[:archived]))
+        end
+
+        if params[:group].present?
+          @projects = @projects.where(namespace_id: Group.find_by(name: params[:group]))
         end
 
         if params[:search].present?

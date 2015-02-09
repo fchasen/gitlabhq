@@ -36,6 +36,51 @@ module API
           present @user, with: Entities::UserBasic
         end
       end
+      
+      # Get a projects list for a user
+      #
+      # Example Request:
+      #   GET /users/:id/projects
+      get ":id/projects" do
+        @user = User.find(params[:id])
+        
+        @projects = case params[:scope]
+          when 'personal' then
+            @user.namespace.projects
+          when 'joined' then
+            @user.authorized_projects.joined(@user)
+          when 'owned' then
+            @user.owned_projects
+          else
+            @user.authorized_projects
+          end
+
+        sort = params[:sort] == 'desc' ? 'desc' : 'asc'
+
+        @projects = case params["order_by"]
+                    when 'id' then @projects.reorder("id #{sort}")
+                    when 'name' then @projects.reorder("name #{sort}")
+                    when 'created_at' then @projects.reorder("created_at #{sort}")
+                    when 'last_activity_at' then @projects.reorder("last_activity_at #{sort}")
+                    else @projects
+                    end
+
+        # If the archived parameter is passed, limit results accordingly
+        if params[:archived].present?
+          @projects = @projects.where(archived: parse_boolean(params[:archived]))
+        end
+
+        if params[:group].present?
+          @projects = @projects.where(namespace_id: Group.find_by(name: params[:group]))
+        end
+
+        if params[:search].present?
+          @projects = @projects.search(params[:search])
+        end
+
+        @projects = paginate @projects
+        present @projects, with: Entities::Project
+      end
 
       # Create user. Available only for admin
       #
